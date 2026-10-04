@@ -1,6 +1,8 @@
 import { primaryButton, secondaryButton } from './buttons';
+import { Link } from './Link';
 
 type Props = {
+  toolName: string;
   pageCount: number;
   selectedCount: number;
   exportOpen: boolean;
@@ -12,6 +14,7 @@ type Props = {
 };
 
 export function Toolbar({
+  toolName,
   pageCount,
   selectedCount,
   exportOpen,
@@ -23,8 +26,16 @@ export function Toolbar({
 }: Props) {
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
-      <div className="mr-auto">
-        <h1 className="text-lg font-semibold tracking-tight">sey-pdf</h1>
+      <div className="mr-auto min-w-0">
+        <div className="flex items-baseline gap-2 text-lg">
+          <Link to="/" className="font-semibold tracking-tight hover:text-neutral-600">
+            sey-pdf
+          </Link>
+          <span aria-hidden="true" className="text-neutral-300">
+            /
+          </span>
+          <h1 className="truncate font-medium">{toolName}</h1>
+        </div>
         <p className="text-xs text-neutral-500">Files stay on your device.</p>
       </div>
 
@@ -50,7 +61,7 @@ export function Toolbar({
       <button
         type="button"
         className={primaryButton}
-        disabled={pageCount === 0 && !exportOpen}
+        disabled={pageCount === 0}
         aria-expanded={exportOpen}
         aria-controls={exportOpen ? 'export-drawer' : undefined}
         onClick={onToggleExport}
