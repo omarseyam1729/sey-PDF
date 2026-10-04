@@ -10,7 +10,7 @@ type Props = {
 export function Notices({ notices, onDismiss }: Props) {
   if (notices.length === 0) return null;
   return (
-    <div role="status" className="fixed right-4 bottom-20 z-30 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <div role="status" className="fixed bottom-20 left-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
       {notices.map((notice) => (
         <div
           key={notice.id}

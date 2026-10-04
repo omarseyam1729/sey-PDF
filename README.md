@@ -13,7 +13,10 @@ with pdf-lib on export.
 - Drag to reorder (mouse, long-press on touch, or Space + arrow keys)
 - Rotate, duplicate and delete pages
 - Select pages (click) to rotate, delete or extract them in bulk; Esc clears the selection
-- **Export** downloads a new PDF with exactly the pages shown, in order and rotation
+- **Export** opens a drawer on the right that shows the real download size, updating
+  live as you edit, for all pages or just the selection
+- Optional compression (Lossless, Balanced, Strong) with original vs compressed size,
+  then download a PDF with exactly the pages shown, in order and rotation
 - Merging is just dropping several files and exporting
 
 ## Development
@@ -41,12 +44,28 @@ Editing only changes that array. The PDF itself is built once, on export
 applying its rotation. The same path powers merge, reorder, delete, duplicate,
 rotate and extract.
 
+The export drawer builds that PDF in the background (debounced) so the size it shows
+is the size of the file you get; downloading reuses the same bytes.
+
+Compression (`src/lib/compress.ts`) takes a PDF Blob and returns a smaller one, so
+the UI does not depend on how it is done:
+
+- **Lossless** deflates streams that were stored uncompressed.
+- **Balanced / Strong** also re-encode large RGB and grey images (JPEG, or Flate
+  with optional PNG predictors) as JPEG, capped at 2000 / 1200 px on the longest
+  side. Text and vector content are untouched.
+- Transparency masks, CMYK and other unusual images are left alone, an image is only
+  replaced when the result is clearly smaller, and the output is never bigger than
+  the input.
+
 | Path | Role |
 | --- | --- |
 | `src/store/workspace.ts` | Reducer for sources, pages and selection |
 | `src/lib/renderPdf.ts` | PDF.js: open, validate, render thumbnails |
 | `src/lib/thumbnails.ts` | Thumbnail object-URL store (kept out of React state) |
 | `src/lib/pdf.ts` | pdf-lib: build the output PDF |
+| `src/lib/compress.ts` | Compression presets (Blob in, Blob out) |
+| `src/features/export/` | Export drawer and the hook that builds/compresses in the background |
 | `src/lib/download.ts` | Save a Blob as a file |
 | `src/components/` | Toolbar, page grid, page card, empty state, notices |
 

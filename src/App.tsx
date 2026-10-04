@@ -1,25 +1,21 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { secondaryButton } from './components/buttons';
 import { EmptyState } from './components/EmptyState';
 import { Notices, type Notice } from './components/Notices';
 import { PageGrid } from './components/PageGrid';
-import { secondaryButton, Toolbar } from './components/Toolbar';
-import { downloadBlob } from './lib/download';
+import { Toolbar } from './components/Toolbar';
+import { ExportDrawer, type ExportScope } from './features/export/ExportDrawer';
+import type { Compression } from './features/export/useExportFiles';
 import { clearThumbnails } from './lib/thumbnails';
 import { initialWorkspace, workspaceReducer } from './store/workspace';
-import type { PdfPage, PdfSource } from './types';
-
-function outputName(sources: PdfSource[], pages: PdfPage[], suffix: string) {
-  const used = sources.filter((s) => pages.some((p) => p.sourceId === s.id));
-  const base = used.length === 1 ? used[0].name.replace(/\.pdf$/i, '') : 'merged';
-  return `${base}-${suffix}.pdf`;
-}
 
 export default function App() {
   const [state, dispatch] = useReducer(workspaceReducer, initialWorkspace);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loadingCount, setLoadingCount] = useState(0);
-  const [exporting, setExporting] = useState(false);
+  const [exportScope, setExportScope] = useState<ExportScope | null>(null);
+  const [compression, setCompression] = useState<Compression>('none');
 
   const notify = (message: string) =>
     setNotices((current) => [...current, { id: crypto.randomUUID(), message }]);
@@ -45,24 +41,6 @@ export default function App() {
     }
   }
 
-  async function exportPages(pages: PdfPage[], suffix: string) {
-    setExporting(true);
-    try {
-      const { buildPdf } = await import('./lib/pdf');
-      const blob = await buildPdf(state.sources, pages);
-      downloadBlob(blob, outputName(state.sources, pages, suffix));
-    } catch (err) {
-      console.error(err);
-      notify(`Export failed: ${(err as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Extract keeps workspace order, not the order pages were clicked.
-  const extractSelected = () =>
-    exportPages(state.pages.filter((p) => state.selected.has(p.id)), 'extract');
-
   function clearAll() {
     if (!window.confirm('Remove all files and pages from the workspace?')) return;
     dispatch({ type: 'reset' });
@@ -81,40 +59,67 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dispatch({ type: 'clearSelection' });
+      if (event.key !== 'Escape') return;
+      if (exportScope) setExportScope(null);
+      else dispatch({ type: 'clearSelection' });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [exportScope]);
+
+  // Exporting the selection falls back to all pages once nothing is selected.
+  const scope: ExportScope = exportScope === 'selected' && state.selected.size > 0 ? 'selected' : 'all';
+  // Memoised so the drawer only rebuilds the PDF when the exported pages change.
+  // Extract keeps workspace order, not the order pages were clicked.
+  const exportPages = useMemo(
+    () => (scope === 'selected' ? state.pages.filter((p) => state.selected.has(p.id)) : state.pages),
+    [scope, state.pages, state.selected],
+  );
 
   const selectedIds = [...state.selected];
   const pageCount = state.pages.length;
   const fileCount = new Set(state.pages.map((p) => p.sourceId)).size;
 
   return (
-    <div {...getRootProps({ className: 'flex min-h-screen flex-col outline-none' })}>
+    <div {...getRootProps({ className: 'flex h-dvh flex-col outline-none' })}>
       <input {...getInputProps()} />
 
       <Toolbar
         pageCount={pageCount}
         selectedCount={selectedIds.length}
-        exporting={exporting}
-        onExport={() => exportPages(state.pages, 'edited')}
-        onExtract={extractSelected}
+        exportOpen={exportScope !== null}
+        onToggleExport={() => setExportScope(exportScope ? null : 'all')}
+        onExtract={() => setExportScope('selected')}
         onRotateSelected={() => dispatch({ type: 'rotate', ids: selectedIds })}
         onDeleteSelected={() => dispatch({ type: 'delete', ids: selectedIds })}
         onClearSelection={() => dispatch({ type: 'clearSelection' })}
       />
 
-      <main className="flex-1 p-4 sm:p-6">
-        {pageCount === 0 ? (
-          <EmptyState loading={loadingCount > 0} onBrowse={open} />
-        ) : (
-          <PageGrid state={state} dispatch={dispatch} />
-        )}
-      </main>
+      <div className="flex min-h-0 flex-1">
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          {pageCount === 0 ? (
+            <EmptyState loading={loadingCount > 0} onBrowse={open} />
+          ) : (
+            <PageGrid state={state} dispatch={dispatch} />
+          )}
+        </main>
 
-      <footer className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+        {exportScope && (
+          <ExportDrawer
+            sources={state.sources}
+            pages={exportPages}
+            scope={scope}
+            totalCount={pageCount}
+            selectedCount={state.selected.size}
+            compression={compression}
+            onScopeChange={setExportScope}
+            onCompressionChange={setCompression}
+            onClose={() => setExportScope(null)}
+          />
+        )}
+      </div>
+
+      <footer className="flex flex-wrap items-center gap-3 border-t border-neutral-200 bg-white px-4 py-3 sm:px-6">
         <button type="button" className={secondaryButton} onClick={open}>
           Add PDF
         </button>
